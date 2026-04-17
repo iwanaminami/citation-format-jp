@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>論文業績リスト生成ツール</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='5' fill='%232563eb'/><rect x='7' y='7' width='18' height='2.5' rx='1.2' fill='white'/><rect x='7' y='12' width='18' height='2.5' rx='1.2' fill='white'/><rect x='7' y='17' width='13' height='2.5' rx='1.2' fill='white'/><rect x='7' y='22' width='10' height='2.5' rx='1.2' fill='white'/></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --border: #e0e4ea;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: #eff6ff;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+      --text: #1e293b;
+      --muted: #64748b;
+      --mono: 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    header .subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg);
+      margin-bottom: 12px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .drop-zone .icon { font-size: 2rem; margin-bottom: 8px; }
+    .drop-zone .label { font-size: 0.9rem; color: var(--muted); }
+    .drop-zone .label b { color: var(--accent); cursor: pointer; }
+
+    /* Textarea */
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      resize: vertical;
+      outline: none;
+      color: var(--text);
+      background: var(--bg);
+      transition: border 0.2s;
+    }
+
+    textarea:focus { border-color: var(--accent); background: #fff; }
+
+    .textarea-hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* Format selector */
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .format-option {
+      position: relative;
+    }
+
+    .format-option input[type="radio"] { display: none; }
+
+    .format-option label {
+      display: block;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .format-option input:checked + label {
+      border-color: var(--accent);
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .format-option label .fmt-name {
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: block;
+    }
+
+    .format-option label .fmt-desc {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .format-option input:checked + label .fmt-desc {
+      color: #3b82f6;
+    }
+
+    /* Options row */
+    .options-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    .options-row label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .options-row select {
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 0.85rem;
+      outline: none;
+      background: var(--bg);
+    }
+
+    .options-row input[type="text"] {
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 0.85rem;
+      outline: none;
+      background: var(--bg);
+      width: 120px;
+    }
+
+    .options-row input[type="text"]:focus {
+      border-color: var(--accent);
+      background: #fff;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 20px;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { background: #e8ecf0; }
+
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+    }
+
+    .btn-success:hover { background: #15803d; }
+
+    .actions-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* Progress */
+    .progress-bar-wrap {
+      width: 100%;
+      background: var(--border);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    #progress-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* Results table */
+    .results-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    thead th {
+      background: var(--bg);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      color: var(--muted);
+    }
+
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+
+    tbody td {
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .status-ok { background: #dcfce7; color: var(--success); }
+    .status-err { background: #fee2e2; color: var(--danger); }
+    .status-loading { background: #fef3c7; color: var(--warning); }
+
+    .doi-cell { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); word-break: break-all; }
+    .title-cell { max-width: 260px; }
+    .author-cell { max-width: 180px; }
+
+    /* Output area */
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .output-title {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .output-area {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      word-break: break-word;
+      min-height: 120px;
+      font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+    }
+
+    .output-entry {
+      margin: 0;
+      padding-bottom: 8px;
+    }
+
+    .output-entry:last-child { padding-bottom: 0; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #toast.show { opacity: 1; }
+
+    .hidden { display: none !important; }
+
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    details.card > summary {
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0;
+    }
+    details.card > summary::-webkit-details-marker,
+    details.card > summary::marker { display: none; }
+    details.card > summary + * { margin-top: 14px; }
+
+    .details-arrow {
+      font-style: normal;
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      transition: transform 0.2s;
+      transform: rotate(-90deg);
+    }
+    details[open] > summary .details-arrow { transform: rotate(0deg); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📄 論文業績リスト生成ツール</h1>
+    <div class="subtitle">DOIリストから Crossref API で書誌情報を取得し、申請書用フォーマットに変換</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ① DOI の入力 -->
+  <div class="card">
+    <div class="card-title">① DOI の入力</div>
+
+    <div class="drop-zone" id="drop-zone">
+      <div class="icon">📂</div>
+      <div class="label">DOIリストファイルをドロップ、または <b id="file-trigger">クリックして選択</b></div>
+      <div class="label" style="margin-top:4px;font-size:0.75rem;">（.txt / .csv — 1行1DOI）</div>
+    </div>
+    <input type="file" id="file-input" accept=".txt,.csv" multiple style="display:none">
+
+    <textarea id="doi-input" rows="6" placeholder="DOIを1行に1つ入力してください&#10;例:&#10;10.1038/nature12373&#10;10.1126/science.1260419"></textarea>
+    <div class="textarea-hint">コメント行は # で始めてください。空行は無視されます。</div>
+  </div>
+
+  <!-- 書誌情報を取得 -->
+  <div class="actions-row">
+    <button class="btn btn-primary" id="fetch-btn" onclick="startFetch()">
+      ⬇ 書誌情報を取得
+    </button>
+    <button class="btn btn-secondary" onclick="loadTestDois()" title="テスト用DOIを3件入力">
+      🧪 テスト
+    </button>
+    <button class="btn btn-secondary" onclick="clearAll()">
+      🗑 クリア
+    </button>
+    <span id="progress-label"></span>
+  </div>
+  <div class="progress-bar-wrap hidden" id="progress-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+
+  <!-- 取得結果テーブル -->
+  <details class="card hidden" id="fetch-results-section">
+    <summary class="card-title">
+      取得結果
+      <span class="details-arrow">▼</span>
+    </summary>
+    <div class="results-table-wrap">
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>ステータス</th>
+            <th>DOI</th>
+            <th>責任著者</th>
+            <th>著者</th>
+            <th>タイトル</th>
+            <th>雑誌</th>
+            <th>巻/号/頁</th>
+            <th>出版日</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ② 出力フォーマット -->
+  <div class="card">
+    <div class="card-title">② 出力フォーマット</div>
+
+    <div class="format-grid">
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-kakenhi" value="kakenhi" checked>
+        <label for="fmt-kakenhi">
+          <span class="fmt-name">科研費（KAKENHI）</span>
+          <span class="fmt-desc">著者名. タイトル. 雑誌名 巻(号), pp. 年.</span>
+        </label>
+      </div>
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-jst" value="jst">
+        <label for="fmt-jst">
+          <span class="fmt-name">JST 標準</span>
+          <span class="fmt-desc">著者名: タイトル, 雑誌名, 巻, 号, 年, pp.</span>
+        </label>
+      </div>
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-apa" value="apa">
+        <label for="fmt-apa">
+          <span class="fmt-name">APA 7th</span>
+          <span class="fmt-desc">Author (Year). Title. Journal, Vol(Iss), pages.</span>
+        </label>
+      </div>
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-vancouver" value="vancouver">
+        <label for="fmt-vancouver">
+          <span class="fmt-name">Vancouver</span>
+          <span class="fmt-desc">Author. Title. Journal. Year;Vol(Iss):pp.</span>
+        </label>
+      </div>
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-custom" value="custom">
+        <label for="fmt-custom">
+          <span class="fmt-name">業績リスト汎用</span>
+          <span class="fmt-desc">[番号] 著者, "タイトル", 雑誌, vol., pp., 年.</span>
+        </label>
+      </div>
+      <div class="format-option">
+        <input type="radio" name="format" id="fmt-user-custom" value="user-custom">
+        <label for="fmt-user-custom">
+          <span class="fmt-name">独自フォーマット</span>
+          <span class="fmt-desc">テンプレートを自由に設定</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="custom-format-settings" class="hidden" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+      <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px;color:var(--muted)">テンプレート設定</div>
+      <textarea id="custom-template" rows="2">{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}</textarea>
+      <div style="font-size:0.75rem;color:var(--muted);margin-top:6px;line-height:1.7">
+        使用可能な変数：<code>{n}</code> 番号/箇条点　<code>{authors}</code> 著者　<code>{title}</code> タイトル　<code>{journal}</code> 雑誌名　<code>{vol}</code> 巻　<code>{issue}</code> 号　<code>{pages}</code> 頁　<code>{year}</code> 年　<code>{doi}</code> DOIリンク
+      </div>
+    </div>
+
+    <hr class="divider" style="margin:14px 0">
+
+    <div class="options-row">
+      <label>
+        <input type="checkbox" id="opt-doi-link">
+        DOIリンクを末尾に追加
+      </label>
+      <label>
+        <input type="checkbox" id="opt-japanese-name">
+        日本語姓名を逆順（姓 名）
+      </label>
+      <label>
+        <input type="checkbox" id="opt-english-name">
+        英語姓名を逆順（名 姓）
+      </label>
+      <label>
+        リスト形式:
+        <select id="opt-list-style">
+          <option value="numbered">番号付き</option>
+          <option value="bullet">箇条書き（・）</option>
+          <option value="none" selected>なし</option>
+        </select>
+      </label>
+      <label>
+        著者名の表示形式:
+        <select id="opt-own-format">
+          <option value="auto">自動（フォーマットに従う）</option>
+          <option value="family-initial-comma">Family, G.（例: Yamada, T.）</option>
+          <option value="family-initial-comma-np">Family, G（例: Yamada, T）</option>
+          <option value="family-initial" selected>Family G.（例: Yamada T.）</option>
+          <option value="family-initial-np">Family G（例: Yamada T）</option>
+          <option value="initial-family">G. Family（例: T. Yamada）</option>
+          <option value="initial-family-np">G Family（例: T Yamada）</option>
+          <option value="given-family">Given Family（例: Taro Yamada）</option>
+          <option value="family-given-comma">Family, Given（例: Yamada, Taro）</option>
+          <option value="family-given">Family Given（例: Yamada Taro）</option>
+        </select>
+      </label>
+      <label>
+        著者表示数:
+        <select id="opt-author-limit">
+          <option value="0" selected>全員</option>
+          <option value="3">3名</option>
+          <option value="6">6名</option>
+          <option value="10">10名</option>
+        </select>
+      </label>
+      <label>
+        並び順:
+        <select id="opt-sort">
+          <option value="input">入力順</option>
+          <option value="date-desc">出版日（新→旧）</option>
+          <option value="date-asc">出版日（旧→新）</option>
+        </select>
+      </label>
+      <label>
+        行間:
+        <select id="opt-line-spacing">
+          <option value="0" selected>なし</option>
+          <option value="1">1行</option>
+          <option value="2">2行</option>
+          <option value="3">3行</option>
+        </select>
+      </label>
+    </div>
+
+    <hr class="divider" style="margin:10px 0">
+
+    <div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:8px">自分の名前</div>
+    <div class="options-row" style="margin-bottom:10px">
+      <label>姓（日本語）: <input type="text" id="opt-own-family-jp" placeholder="山田" style="width:70px"></label>
+      <label>名（日本語）: <input type="text" id="opt-own-given-jp" placeholder="太郎" style="width:70px"></label>
+      <label>姓（英語）: <input type="text" id="opt-own-family-en" placeholder="Yamada" style="width:84px"></label>
+      <label>名（英語）: <input type="text" id="opt-own-given-en" placeholder="Taro" style="width:70px"></label>
+    </div>
+    <div class="options-row">
+      <label>
+        <input type="checkbox" id="opt-name-bold" checked>
+        自分の名前を太字
+      </label>
+      <label>
+        自分の名前の下線:
+        <select id="opt-name-underline">
+          <option value="none">なし</option>
+          <option value="single" selected>一重線</option>
+          <option value="double">二重線</option>
+        </select>
+      </label>
+      <label>
+        <input type="checkbox" id="opt-journal-bold" checked>
+        雑誌名を太字
+      </label>
+      <label>
+        <input type="checkbox" id="opt-journal-italic" checked>
+        雑誌名を斜体
+      </label>
+    </div>
+
+    <hr class="divider" style="margin:10px 0">
+
+    <div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:8px">フォント</div>
+    <div class="options-row">
+      <label>
+        出力全体:
+        <select id="opt-font-base">
+          <option value="">デフォルト</option>
+          <option value="Times New Roman" selected>Times New Roman</option>
+          <option value="Arial">Arial</option>
+        </select>
+      </label>
+      <label>
+        自分の名前:
+        <select id="opt-font-authors">
+          <option value="">全体フォントに従う</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Arial" selected>Arial</option>
+        </select>
+      </label>
+      <label>
+        雑誌名:
+        <select id="opt-font-journal">
+          <option value="">全体フォントに従う</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Arial" selected>Arial</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- フォーマット済み業績リスト -->
+  <div class="card hidden" id="output-section">
+    <div class="output-header">
+      <div class="output-title">フォーマット済み業績リスト</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="regenerateOutput()">🔄 再生成</button>
+        <button class="btn btn-success" onclick="copyOutput()">📋 コピー</button>
+        <button class="btn btn-secondary" onclick="downloadOutput()">💾 ダウンロード</button>
+      </div>
+    </div>
+    <div class="output-area" id="output-area"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────
+  let papers = []; // { doi, status, data | error }
+
+  // ─── File input ──────────────────────────────────────────
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  document.getElementById('file-trigger').addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('click', e => { if (e.target.id !== 'file-trigger') fileInput.click(); });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    handleFiles([...e.dataTransfer.files]);
+  });
+
+  fileInput.addEventListener('change', e => handleFiles([...e.target.files]));
+
+  function handleFiles(files) {
+    const readers = files.map(f => new Promise(res => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.readAsText(f, 'UTF-8');
+    }));
+    Promise.all(readers).then(contents => {
+      const existing = document.getElementById('doi-input').value.trim();
+      const newDois = contents.join('\n');
+      document.getElementById('doi-input').value = existing ? existing + '\n' + newDois : newDois;
+    });
+  }
+
+  // ─── Parse DOI list ──────────────────────────────────────
+  function parseDois(text) {
+    return text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
+      .map(l => {
+        return l.replace(/^doi:\s*/i, '')
+                .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+                .replace(/,$/, '')
+                .trim();
+      })
+      .filter(l => /^10\.\d{4,}\//.test(l));
+  }
+
+  // ─── Fetch from Crossref ─────────────────────────────────
+  async function fetchDoi(doi) {
+    const url = `https://api.crossref.org/works/${encodeURIComponent(doi)}?mailto=research-tool@example.com`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.message;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function startFetch() {
+    const rawText = document.getElementById('doi-input').value;
+    const dois = parseDois(rawText);
+
+    if (dois.length === 0) {
+      toast('有効なDOIが見つかりません');
+      return;
+    }
+
+    papers = dois.map(doi => ({ doi, status: 'loading', data: null, error: null }));
+    renderTable();
+
+    document.getElementById('fetch-results-section').classList.remove('hidden');
+    document.getElementById('progress-wrap').classList.remove('hidden');
+    document.getElementById('fetch-btn').disabled = true;
+
+    for (let i = 0; i < papers.length; i++) {
+      updateProgress(i, papers.length);
+      try {
+        papers[i].data = await fetchDoi(papers[i].doi);
+        papers[i].status = 'ok';
+      } catch (e) {
+        papers[i].status = 'error';
+        papers[i].error = e.message;
+      }
+      renderRow(i);
+      if (i < papers.length - 1) await sleep(200);
+    }
+
+    updateProgress(papers.length, papers.length);
+    document.getElementById('fetch-btn').disabled = false;
+    generateOutput();
+    toast(`完了: ${papers.filter(p => p.status === 'ok').length}件取得`);
+  }
+
+  function updateProgress(done, total) {
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-label').textContent =
+      total ? `${done} / ${total} 件処理済み` : '';
+  }
+
+  // ─── Table rendering ─────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('results-body');
+    tbody.innerHTML = '';
+    papers.forEach((_, i) => renderRow(i));
+  }
+
+  function toggleCorresponding(i, checked) {
+    papers[i].isCorresponding = checked;
+    generateOutput();
+  }
+
+  function renderRow(i) {
+    const p = papers[i];
+    const tbody = document.getElementById('results-body');
+    let row = tbody.children[i];
+    if (!row) {
+      row = document.createElement('tr');
+      tbody.appendChild(row);
+    }
+
+    if (p.status === 'loading') {
+      row.innerHTML = `
+        <td>${i + 1}</td>
+        <td><span class="status-badge status-loading">取得中...</span></td>
+        <td class="doi-cell">${escHtml(p.doi)}</td>
+        <td colspan="6" style="color:var(--muted)">—</td>`;
+      return;
+    }
+
+    if (p.status === 'error') {
+      row.innerHTML = `
+        <td>${i + 1}</td>
+        <td><span class="status-badge status-err">エラー</span></td>
+        <td class="doi-cell">${escHtml(p.doi)}</td>
+        <td colspan="6" style="color:var(--danger)">${escHtml(p.error)}</td>`;
+      return;
+    }
+
+    const d = p.data;
+    const authors = formatAuthors(d.author || [], 3).text;
+    const title = (d.title || [''])[0] || '—';
+    const journal = (d['container-title'] || [''])[0] || (d['publisher'] || '—');
+    const vol = d.volume || '';
+    const iss = d.issue || '';
+    const pg = d.page || '';
+    const volStr = [vol && `vol.${vol}`, iss && `no.${iss}`, pg && `pp.${pg}`].filter(Boolean).join(', ');
+    const dateStr = getDateDisplay(d);
+
+    row.innerHTML = `
+      <td>${i + 1}</td>
+      <td><span class="status-badge status-ok">OK</span></td>
+      <td class="doi-cell"><a href="https://doi.org/${escHtml(p.doi)}" target="_blank">${escHtml(p.doi)}</a></td>
+      <td style="text-align:center"><input type="checkbox" onchange="toggleCorresponding(${i}, this.checked)" ${p.isCorresponding ? 'checked' : ''} title="責任著者の場合チェック"></td>
+      <td class="author-cell">${escHtml(authors)}</td>
+      <td class="title-cell">${escHtml(title)}</td>
+      <td>${escHtml(journal)}</td>
+      <td style="white-space:nowrap;font-size:0.78rem">${escHtml(volStr)}</td>
+      <td style="white-space:nowrap">${escHtml(dateStr)}</td>`;
+  }
+
+  // ─── Output generation ───────────────────────────────────
+  function generateOutput() {
+    const fmt = document.querySelector('input[name="format"]:checked').value;
+    const addDoi = document.getElementById('opt-doi-link').checked;
+    const authorLimit = parseInt(document.getElementById('opt-author-limit').value, 10);
+    const sort = document.getElementById('opt-sort').value;
+    const japReverse = document.getElementById('opt-japanese-name').checked;
+    const engReverse = document.getElementById('opt-english-name').checked;
+    const listStyle = document.getElementById('opt-list-style').value;
+    const lineSpacing = parseInt(document.getElementById('opt-line-spacing').value, 10);
+
+    let entries = papers.filter(p => p.status === 'ok');
+
+    if (sort === 'date-desc') entries = [...entries].sort((a, b) => getDateValue(b.data) - getDateValue(a.data));
+    else if (sort === 'date-asc') entries = [...entries].sort((a, b) => getDateValue(a.data) - getDateValue(b.data));
+
+    const ownOpts = {
+      familyJP: document.getElementById('opt-own-family-jp').value.trim(),
+      givenJP:  document.getElementById('opt-own-given-jp').value.trim(),
+      familyEN: document.getElementById('opt-own-family-en').value.trim(),
+      givenEN:  document.getElementById('opt-own-given-en').value.trim(),
+      format:   document.getElementById('opt-own-format').value,
+    };
+    const nameBold      = document.getElementById('opt-name-bold').checked;
+    const nameUnderline = document.getElementById('opt-name-underline').value;
+    const journalBold   = document.getElementById('opt-journal-bold').checked;
+    const journalItalic = document.getElementById('opt-journal-italic').checked;
+    const fontBase      = document.getElementById('opt-font-base').value;
+    const fontAuthors   = document.getElementById('opt-font-authors').value;
+    const fontJournal   = document.getElementById('opt-font-journal').value;
+    const fmtOpts = { nameBold, nameUnderline, journalBold, journalItalic, fontAuthors, fontJournal };
+
+    const items = entries.map((p, idx) => {
+      const d = p.data;
+      const { text: authors, ownText } = formatAuthors(d.author || [], authorLimit, japReverse, engReverse, ownOpts, p.isCorresponding);
+      const title = (d.title || [''])[0] || '';
+      const journal = (d['container-title'] || [''])[0] || d['publisher'] || '';
+      const vol = d.volume || '';
+      const iss = d.issue || '';
+      const pg = d.page || '';
+      const year = getYear(d);
+      const doiStr = addDoi ? ` https://doi.org/${p.doi}` : '';
+      const n = listStyle === 'numbered' ? idx + 1 : (listStyle === 'bullet' ? '・' : null);
+
+      const htmlLine = buildHtmlLine(n, authors, title, journal, vol, iss, pg, year, doiStr, ownText, fmtOpts, fmt);
+
+      return { htmlLine };
+    });
+
+    document.getElementById('output-section').classList.remove('hidden');
+
+    const outputEl = document.getElementById('output-area');
+    outputEl.innerHTML = '';
+    outputEl.style.fontFamily = fontBase ? `'${fontBase}', serif` : '';
+    items.forEach(({ htmlLine }, idx) => {
+      const p = document.createElement('p');
+      p.className = 'output-entry';
+      p.style.textAlign = 'justify';
+      p.style.background = 'none';
+      p.innerHTML = htmlLine;
+      outputEl.appendChild(p);
+      if (idx < items.length - 1) {
+        for (let i = 0; i < lineSpacing; i++) {
+          const blank = document.createElement('p');
+          blank.style.cssText = 'margin:0;padding:0;line-height:1.8;background:none';
+          blank.innerHTML = '<br>';
+          outputEl.appendChild(blank);
+        }
+      }
+    });
+
+    const failCount = papers.filter(p => p.status === 'error').length;
+    if (failCount > 0) {
+      const note = document.createElement('div');
+      note.style.cssText = 'color:var(--danger);font-size:0.8rem;margin-top:8px';
+      note.textContent = `⚠ ${failCount}件の取得に失敗しました（上の表を確認してください）`;
+      outputEl.appendChild(note);
+    }
+  }
+
+  function regenerateOutput() { generateOutput(); }
+
+  // ─── Formatters ──────────────────────────────────────────
+  function prefix(n) {
+    if (n === null || n === undefined) return '';
+    return typeof n === 'number' ? `${n}. ` : `${n} `;
+  }
+
+  function formatKakenhi(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const v = vol ? `${vol}` : '';
+    const i = iss ? `(${iss})` : '';
+    const p = pg ? `, pp. ${pg}` : '';
+    return `${prefix(n)}${authors}. ${title}. ${journal} ${v}${i}${p} (${year}).${doi}`;
+  }
+
+  function formatJST(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const parts = [journal];
+    if (vol) parts.push(`${vol}`);
+    if (iss) parts.push(`(${iss})`);
+    if (pg) parts.push(`pp. ${pg}`);
+    parts.push(year);
+    return `${prefix(n)}${authors}: ${title}, ${parts.join(', ')}.${doi}`;
+  }
+
+  function formatAPA(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const v = vol ? vol : '';
+    const i = iss ? `(${iss})` : '';
+    const p = pg ? `, ${pg}` : '';
+    return `${prefix(n)}${authors} (${year}). ${title}. ${journal}, ${v}${i}${p}.${doi}`;
+  }
+
+  function formatVancouver(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const v = vol ? `${vol}` : '';
+    const i = iss ? `(${iss})` : '';
+    const p = pg ? `:${pg}` : '';
+    return `${prefix(n)}${authors}. ${title}. ${journal}. ${year};${v}${i}${p}.${doi}`;
+  }
+
+  function formatCustom(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const v = vol ? `vol. ${vol}` : '';
+    const i = iss ? `no. ${iss}` : '';
+    const p = pg ? `pp. ${pg}` : '';
+    const detail = [v, i, p].filter(Boolean).join(', ');
+    const bracket = n === null ? '' : (typeof n === 'number' ? `[${n}] ` : `${n} `);
+    return `${bracket}${authors}, "${title}", ${journal}, ${detail}, ${year}.${doi}`;
+  }
+
+  function formatUserCustom(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const tpl = document.getElementById('custom-template').value
+      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}';
+    return tpl
+      .replace(/\{n\}/g, prefix(n))
+      .replace(/\{authors\}/g, authors)
+      .replace(/\{title\}/g, title)
+      .replace(/\{journal\}/g, journal)
+      .replace(/\{vol\}/g, vol)
+      .replace(/\{issue\}/g, iss)
+      .replace(/\{pages\}/g, pg)
+      .replace(/\{year\}/g, year)
+      .replace(/\{doi\}/g, doi.trim());
+  }
+
+  // ─── HTML formatting for output display ──────────────────
+  function buildHtmlLine(n, authors, title, journal, vol, iss, pg, year, doi, ownText, opts, fmt) {
+    const eTitle = escHtml(title);
+    let eJournal = escHtml(journal);
+    let eAuthors = escHtml(authors);
+    const eVol = escHtml(vol);
+    const eIss = escHtml(iss);
+    const ePg = escHtml(pg);
+    const eYear = escHtml(year);
+    const eDoi = escHtml(doi);
+
+    // 雑誌名: フォント + 太字 + 斜体
+    if (journal && (opts.journalBold || opts.journalItalic || opts.fontJournal)) {
+      let open = '', close = '';
+      if (opts.fontJournal)   { open += `<span style="font-family:'${opts.fontJournal}'">`; close = '</span>' + close; }
+      if (opts.journalBold)   { open += '<strong>'; close = '</strong>' + close; }
+      if (opts.journalItalic) { open += '<em>';     close = '</em>'     + close; }
+      eJournal = open + eJournal + close;
+    }
+
+    // 自分の名前: フォント + 太字 + 下線
+    if (ownText && (opts.fontAuthors || opts.nameBold || opts.nameUnderline !== 'none')) {
+      const eOwn = escHtml(ownText);
+      const nEsc = eOwn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let open = '', close = '';
+      if (opts.fontAuthors)   { open += `<span style="font-family:'${opts.fontAuthors}'">`; close = '</span>' + close; }
+      if (opts.nameBold)      { open += '<strong>'; close = '</strong>' + close; }
+      if (opts.nameUnderline === 'single') { open += '<u>'; close = '</u>' + close; }
+      if (opts.nameUnderline === 'double') { open += '<u style="text-decoration-style: double; text-decoration: underline double; text-underline: double;">'; close = '</u>' + close; }
+      eAuthors = eAuthors.replace(new RegExp(nEsc, 'g'), open + eOwn + close);
+    }
+
+    switch (fmt) {
+      case 'kakenhi':     return formatKakenhi(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'jst':         return formatJST(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'apa':         return formatAPA(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'vancouver':   return formatVancouver(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'custom':      return formatCustom(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'user-custom': return formatUserCustomHtml(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+    }
+    return '';
+  }
+
+  function formatUserCustomHtml(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const tpl = document.getElementById('custom-template').value
+      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}';
+    return escHtml(tpl)
+      .replace(/\{n\}/g, escHtml(prefix(n)))
+      .replace(/\{authors\}/g, authors)
+      .replace(/\{title\}/g, title)
+      .replace(/\{journal\}/g, journal)
+      .replace(/\{vol\}/g, vol)
+      .replace(/\{issue\}/g, iss)
+      .replace(/\{pages\}/g, pg)
+      .replace(/\{year\}/g, year)
+      .replace(/\{doi\}/g, doi.trim());
+  }
+
+  // ─── Author formatting ───────────────────────────────────
+  function formatAuthors(authors, limit = 0, japReverse = false, engReverse = false, ownOpts = null, isCorresponding = false) {
+    if (!authors || authors.length === 0) return { text: '著者不明', ownText: null };
+    let list = authors;
+    const truncated = limit > 0 && list.length > limit;
+    if (truncated) list = list.slice(0, limit);
+
+    let ownText = null;
+
+    const names = list.map(a => {
+      const family = a.family || '';
+      const given = a.given || '';
+      const isJapanese = /^[\u3000-\u9FFF\uF900-\uFAFF]/.test(family);
+      const isOwn = ownOpts && matchesOwn(a, ownOpts);
+
+      let nameStr;
+      const globalFmt = ownOpts && ownOpts.format && ownOpts.format !== 'auto' ? ownOpts.format : null;
+      if (family && given) {
+        if (globalFmt) nameStr = formatOwnName(a, globalFmt);
+        else if (japReverse && isJapanese) nameStr = `${family} ${given}`;
+        else if (engReverse && !isJapanese) nameStr = `${given} ${family}`;
+        else nameStr = `${family}, ${given.charAt(0)}.`;
+      } else {
+        nameStr = a.name || family || '?';
+      }
+
+      if (isOwn) {
+        ownText = nameStr;
+        if (isCorresponding) nameStr += '*';
+      }
+      return nameStr;
+    });
+
+    return { text: names.join(', ') + (truncated ? ' et al.' : ''), ownText };
+  }
+
+  function matchesOwn(author, opts) {
+    const aFamily = (author.family || '').trim();
+    const aGiven  = (author.given  || '').trim();
+
+    function familyEq(ownFam) {
+      return ownFam && aFamily.toLowerCase() === ownFam.toLowerCase();
+    }
+
+    function givenEq(ownGiv) {
+      if (!ownGiv) return true;
+      const ag = aGiven.toLowerCase().replace(/\.$/, '');
+      const og = ownGiv.toLowerCase().replace(/\.$/, '');
+      return ag === og || ag.startsWith(og) || og.startsWith(ag) || ag.charAt(0) === og.charAt(0);
+    }
+
+    if (familyEq(opts.familyJP) && givenEq(opts.givenJP)) return true;
+    if (familyEq(opts.familyEN) && givenEq(opts.givenEN)) return true;
+    return false;
+  }
+
+  function formatOwnName(author, format) {
+    const family  = author.family || '';
+    const given   = author.given  || '';
+    const initial   = given ? given.charAt(0) + '.' : '';
+    const initialNP = given ? given.charAt(0)       : '';
+    switch (format) {
+      case 'family-initial-comma':    return initial   ? `${family}, ${initial}`   : family;
+      case 'family-initial-comma-np': return initialNP ? `${family}, ${initialNP}` : family;
+      case 'family-initial':          return initial   ? `${family} ${initial}`    : family;
+      case 'family-initial-np':       return initialNP ? `${family} ${initialNP}`  : family;
+      case 'initial-family':          return initial   ? `${initial} ${family}`    : family;
+      case 'initial-family-np':       return initialNP ? `${initialNP} ${family}`  : family;
+      case 'given-family':            return given     ? `${given} ${family}`      : family;
+      case 'family-given-comma':      return given     ? `${family}, ${given}`     : family;
+      case 'family-given':            return given     ? `${family} ${given}`      : family;
+      default:                        return initial   ? `${family}, ${initial}`   : family;
+    }
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────
+  function getYear(d) {
+    const dp = d && (d['published-print'] || d['published-online'] || d['created']);
+    if (dp && dp['date-parts'] && dp['date-parts'][0]) return dp['date-parts'][0][0];
+    return '—';
+  }
+
+  function getDateDisplay(d) {
+    const dp = d && (d['published-print'] || d['published-online'] || d['created']);
+    if (dp && dp['date-parts'] && dp['date-parts'][0]) {
+      const [y, m, day] = dp['date-parts'][0];
+      if (y && m && day) return `${y}/${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`;
+      if (y && m) return `${y}/${String(m).padStart(2,'0')}`;
+      return String(y || '—');
+    }
+    return '—';
+  }
+
+  function getDateValue(d) {
+    const dp = d && (d['published-print'] || d['published-online'] || d['created']);
+    if (dp && dp['date-parts'] && dp['date-parts'][0]) {
+      const [y = 0, m = 0, day = 0] = dp['date-parts'][0];
+      return y * 10000 + m * 100 + day;
+    }
+    return 0;
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ─── Copy / Download ─────────────────────────────────────
+  function getOutputText() {
+    const lineSpacing = parseInt(document.getElementById('opt-line-spacing').value, 10);
+    const sep = '\r\n' + '\r\n'.repeat(lineSpacing);
+    return [...document.querySelectorAll('#output-area .output-entry')]
+      .map(el => el.textContent)
+      .join(sep);
+  }
+
+  function copyOutput() {
+    const lineSpacing = parseInt(document.getElementById('opt-line-spacing').value, 10);
+    const fontBase = document.getElementById('opt-font-base').value;
+    const fontFamilyStyle = fontBase ? `font-family:'${fontBase}', serif;` : '';
+    const resetStyle = "font-size: 10.5pt; line-height: normal;";
+    const entries = [...document.querySelectorAll('#output-area .output-entry')];
+    const htmlParts = [];
+    entries.forEach((el, idx) => {
+      htmlParts.push(`<p style="margin:0;padding:0;text-align:justify;background:none">${el.innerHTML}</p>`);
+      if (idx < entries.length - 1) {
+        for (let i = 0; i < lineSpacing; i++) {
+          htmlParts.push('<p style="margin:0;padding:0;background:none"><br></p>');
+        }
+      }
+    });
+    const htmlContent = `<div style="${fontFamilyStyle} ${resetStyle}">${htmlParts.join('')}</div>`;
+    const plainText  = getOutputText();
+
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      navigator.clipboard.write([new ClipboardItem({
+        'text/html':  new Blob([htmlContent], { type: 'text/html' }),
+        'text/plain': new Blob([plainText],   { type: 'text/plain' }),
+      })])
+        .then(() => toast('クリップボードにコピーしました'))
+        .catch(() => fallbackCopyHtml(htmlContent, plainText));
+    } else {
+      fallbackCopyHtml(htmlContent, plainText);
+    }
+  }
+
+  function fallbackCopyHtml(html, plain) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    div.style.cssText = 'position:fixed;top:0;left:0;opacity:0;white-space:pre-wrap;pointer-events:none';
+    document.body.appendChild(div);
+    const range = document.createRange();
+    range.selectNodeContents(div);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* ignore */ }
+    sel.removeAllRanges();
+    document.body.removeChild(div);
+
+    if (ok) {
+      toast('クリップボードにコピーしました');
+      return;
+    }
+
+    // 最終手段: 書式なしテキスト
+    const ta = document.createElement('textarea');
+    ta.value = plain;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try {
+      document.execCommand('copy');
+      toast('クリップボードにコピーしました（書式なし）');
+    } catch {
+      toast('コピーに失敗しました');
+    }
+    document.body.removeChild(ta);
+  }
+
+  function downloadOutput() {
+    const text = getOutputText();
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `publications_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── Format radio: show/hide custom settings ─────────────
+  document.querySelectorAll('input[name="format"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const panel = document.getElementById('custom-format-settings');
+      panel.classList.toggle('hidden',
+        document.querySelector('input[name="format"]:checked').value !== 'user-custom');
+    });
+  });
+
+  // ─── Misc ────────────────────────────────────────────────
+  function loadTestDois() {
+    document.getElementById('doi-input').value = '10.1038/nature12373\n10.1126/science.1260419\n10.1016/j.cell.2016.06.010';
+  }
+
+  function clearAll() {
+    document.getElementById('doi-input').value = '';
+    papers = [];
+    document.getElementById('fetch-results-section').classList.add('hidden');
+    document.getElementById('output-section').classList.add('hidden');
+    document.getElementById('progress-wrap').classList.add('hidden');
+    document.getElementById('progress-label').textContent = '';
+    document.getElementById('progress-bar').style.width = '0%';
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+</script>
+
+</body>
+</html>
