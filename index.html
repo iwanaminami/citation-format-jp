@@ -510,6 +510,13 @@
         </label>
       </div>
       <div class="format-option">
+        <input type="radio" name="format" id="fmt-first-author" value="first-author">
+        <label for="fmt-first-author">
+          <span class="fmt-name">第1著者短縮</span>
+          <span class="fmt-desc">第1著者姓 et al. 雑誌名 年</span>
+        </label>
+      </div>
+      <div class="format-option">
         <input type="radio" name="format" id="fmt-custom" value="custom">
         <label for="fmt-custom">
           <span class="fmt-name">業績リスト汎用</span>
@@ -875,7 +882,23 @@
 
     const items = entries.map((p, idx) => {
       const d = p.data;
-      const { text: authors, ownText } = formatAuthors(d.author || [], authorLimit, japReverse, engReverse, ownOpts, p.isCorresponding);
+      let { text: authors, ownText } = formatAuthors(d.author || [], authorLimit, japReverse, engReverse, ownOpts, p.isCorresponding);
+
+      if (fmt === 'first-author') {
+        if (d.author && d.author.length > 0) {
+          const firstA = d.author[0];
+          const family = firstA.family || firstA.name || '著者不明';
+          const isOwn = ownOpts && matchesOwn(firstA, ownOpts);
+          let nameStr = family;
+          if (isOwn && p.isCorresponding) nameStr += '*';
+          authors = nameStr + (d.author.length > 1 ? ' et al.' : '');
+          ownText = isOwn ? family : null;
+        } else {
+          authors = '著者不明';
+          ownText = null;
+        }
+      }
+
       const title = (d.title || [''])[0] || '';
       const journal = (d['container-title'] || [''])[0] || d['publisher'] || '';
       const vol = d.volume || '';
@@ -959,6 +982,11 @@
     return `${prefix(n)}${authors}. ${title}. ${journal}. ${year};${v}${i}${p}.${doi}`;
   }
 
+  function formatFirstAuthorShort(n, authors, title, journal, vol, iss, pg, year, doi) {
+    const parts = [authors, journal, year].filter(Boolean).join(' ');
+    return `${prefix(n)}${parts}.${doi}`;
+  }
+
   function formatCustom(n, authors, title, journal, vol, iss, pg, year, doi) {
     const v = vol ? `vol. ${vol}` : '';
     const i = iss ? `no. ${iss}` : '';
@@ -1020,6 +1048,7 @@
       case 'jst':         return formatJST(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
       case 'apa':         return formatAPA(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
       case 'vancouver':   return formatVancouver(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
+      case 'first-author':return formatFirstAuthorShort(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
       case 'custom':      return formatCustom(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
       case 'user-custom': return formatUserCustomHtml(n, eAuthors, eTitle, eJournal, eVol, eIss, ePg, eYear, eDoi);
     }
