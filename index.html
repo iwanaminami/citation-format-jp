@@ -461,9 +461,10 @@
         <thead>
           <tr>
             <th>#</th>
+            <th style="text-align:center">除外</th>
             <th>ステータス</th>
             <th>DOI</th>
-            <th>責任著者</th>
+            <th style="text-align:center">責任著者</th>
             <th>著者</th>
             <th>タイトル</th>
             <th>雑誌</th>
@@ -533,8 +534,11 @@
     </div>
 
     <div id="custom-format-settings" class="hidden" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
-      <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px;color:var(--muted)">テンプレート設定</div>
-      <textarea id="custom-template" rows="2">{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:0.82rem;font-weight:700;color:var(--muted)">テンプレート設定</div>
+        <button class="btn btn-secondary" onclick="resetCustomTemplate()" style="padding:2px 8px;font-size:0.75rem;font-weight:600;border-radius:4px;">リセット</button>
+      </div>
+      <textarea id="custom-template" rows="2">{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}). {doi}</textarea>
       <div style="font-size:0.75rem;color:var(--muted);margin-top:6px;line-height:1.7">
         使用可能な変数：<code>{n}</code> 番号/箇条点　<code>{authors}</code> 著者　<code>{title}</code> タイトル　<code>{journal}</code> 雑誌名　<code>{vol}</code> 巻　<code>{issue}</code> 号　<code>{pages}</code> 頁　<code>{year}</code> 年　<code>{doi}</code> DOIリンク
       </div>
@@ -585,6 +589,7 @@
           <option value="3">3名</option>
           <option value="6">6名</option>
           <option value="10">10名</option>
+          <option value="special-5">5名（筆頭・本人・最終を含む）</option>
         </select>
       </label>
       <label>
@@ -754,7 +759,7 @@
       return;
     }
 
-    papers = dois.map(doi => ({ doi, status: 'loading', data: null, error: null }));
+    papers = dois.map(doi => ({ doi, status: 'loading', data: null, error: null, exclude: false }));
     renderTable();
 
     document.getElementById('fetch-results-section').classList.remove('hidden');
@@ -799,6 +804,11 @@
     generateOutput();
   }
 
+  function toggleExclude(i, checked) {
+    papers[i].exclude = checked;
+    generateOutput();
+  }
+
   function renderRow(i) {
     const p = papers[i];
     const tbody = document.getElementById('results-body');
@@ -811,6 +821,7 @@
     if (p.status === 'loading') {
       row.innerHTML = `
         <td>${i + 1}</td>
+        <td style="text-align:center"><input type="checkbox" onchange="toggleExclude(${i}, this.checked)" ${p.exclude ? 'checked' : ''} title="除外"></td>
         <td><span class="status-badge status-loading">取得中...</span></td>
         <td class="doi-cell">${escHtml(p.doi)}</td>
         <td colspan="6" style="color:var(--muted)">—</td>`;
@@ -820,6 +831,7 @@
     if (p.status === 'error') {
       row.innerHTML = `
         <td>${i + 1}</td>
+        <td style="text-align:center"><input type="checkbox" onchange="toggleExclude(${i}, this.checked)" ${p.exclude ? 'checked' : ''} title="除外"></td>
         <td><span class="status-badge status-err">エラー</span></td>
         <td class="doi-cell">${escHtml(p.doi)}</td>
         <td colspan="6" style="color:var(--danger)">${escHtml(p.error)}</td>`;
@@ -838,6 +850,7 @@
 
     row.innerHTML = `
       <td>${i + 1}</td>
+      <td style="text-align:center"><input type="checkbox" onchange="toggleExclude(${i}, this.checked)" ${p.exclude ? 'checked' : ''} title="除外"></td>
       <td><span class="status-badge status-ok">OK</span></td>
       <td class="doi-cell"><a href="https://doi.org/${escHtml(p.doi)}" target="_blank">${escHtml(p.doi)}</a></td>
       <td style="text-align:center"><input type="checkbox" onchange="toggleCorresponding(${i}, this.checked)" ${p.isCorresponding ? 'checked' : ''} title="責任著者の場合チェック"></td>
@@ -852,14 +865,14 @@
   function generateOutput() {
     const fmt = document.querySelector('input[name="format"]:checked').value;
     const addDoi = document.getElementById('opt-doi-link').checked;
-    const authorLimit = parseInt(document.getElementById('opt-author-limit').value, 10);
+    const authorLimit = document.getElementById('opt-author-limit').value;
     const sort = document.getElementById('opt-sort').value;
     const japReverse = document.getElementById('opt-japanese-name').checked;
     const engReverse = document.getElementById('opt-english-name').checked;
     const listStyle = document.getElementById('opt-list-style').value;
     const lineSpacing = parseInt(document.getElementById('opt-line-spacing').value, 10);
 
-    let entries = papers.filter(p => p.status === 'ok');
+    let entries = papers.filter(p => p.status === 'ok' && !p.exclude);
 
     if (sort === 'date-desc') entries = [...entries].sort((a, b) => getDateValue(b.data) - getDateValue(a.data));
     else if (sort === 'date-asc') entries = [...entries].sort((a, b) => getDateValue(a.data) - getDateValue(b.data));
@@ -905,8 +918,8 @@
       const iss = d.issue || '';
       const pg = d.page || '';
       const year = getYear(d);
-      const doiStr = addDoi ? ` https://doi.org/${p.doi}` : '';
-      const n = listStyle === 'numbered' ? idx + 1 : (listStyle === 'bullet' ? '・' : null);
+      const doiStr = (addDoi || fmt === 'user-custom') ? ` https://doi.org/${p.doi}` : '';
+      const n = (fmt === 'user-custom' && listStyle === 'none') ? idx + 1 : (listStyle === 'numbered' ? idx + 1 : (listStyle === 'bullet' ? '・' : null));
 
       const htmlLine = buildHtmlLine(n, authors, title, journal, vol, iss, pg, year, doiStr, ownText, fmtOpts, fmt);
 
@@ -945,6 +958,12 @@
   }
 
   function regenerateOutput() { generateOutput(); }
+
+  function resetCustomTemplate() {
+    const defaultTpl = '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}). {doi}';
+    document.getElementById('custom-template').value = defaultTpl;
+    generateOutput();
+  }
 
   // ─── Formatters ──────────────────────────────────────────
   function prefix(n) {
@@ -998,7 +1017,7 @@
 
   function formatUserCustom(n, authors, title, journal, vol, iss, pg, year, doi) {
     const tpl = document.getElementById('custom-template').value
-      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}';
+      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}). {doi}';
     return tpl
       .replace(/\{n\}/g, prefix(n))
       .replace(/\{authors\}/g, authors)
@@ -1057,7 +1076,7 @@
 
   function formatUserCustomHtml(n, authors, title, journal, vol, iss, pg, year, doi) {
     const tpl = document.getElementById('custom-template').value
-      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}).{doi}';
+      || '{n}{authors}. {title}. {journal} {vol}({issue}), {pages} ({year}). {doi}';
     return escHtml(tpl)
       .replace(/\{n\}/g, escHtml(prefix(n)))
       .replace(/\{authors\}/g, authors)
@@ -1073,13 +1092,51 @@
   // ─── Author formatting ───────────────────────────────────
   function formatAuthors(authors, limit = 0, japReverse = false, engReverse = false, ownOpts = null, isCorresponding = false) {
     if (!authors || authors.length === 0) return { text: '著者不明', ownText: null };
-    let list = authors;
-    const truncated = limit > 0 && list.length > limit;
-    if (truncated) list = list.slice(0, limit);
+
+    const N = authors.length;
+    let selectedIndices = [];
+    let truncated = false;
+
+    if (limit === 'special-5' && N >= 5) {
+      truncated = N > 5;
+      const selected = new Set();
+      selected.add(0);
+      selected.add(N - 1);
+
+      // Find own index
+      let ownIdx = -1;
+      if (ownOpts) {
+        for (let i = 0; i < N; i++) {
+          if (matchesOwn(authors[i], ownOpts)) {
+            ownIdx = i;
+            break;
+          }
+        }
+      }
+      if (ownIdx !== -1) {
+        selected.add(ownIdx);
+      }
+
+      // Fill remaining spots from 1 to N-2
+      for (let i = 1; i < N - 1; i++) {
+        if (selected.size >= 5) break;
+        selected.add(i);
+      }
+
+      selectedIndices = Array.from(selected).sort((a, b) => a - b);
+    } else {
+      const limitNum = (limit === 'special-5') ? 0 : (parseInt(limit, 10) || 0);
+      truncated = limitNum > 0 && N > limitNum;
+      const maxLen = truncated ? limitNum : N;
+      for (let i = 0; i < maxLen; i++) {
+        selectedIndices.push(i);
+      }
+    }
 
     let ownText = null;
 
-    const names = list.map(a => {
+    const names = selectedIndices.map(idx => {
+      const a = authors[idx];
       const family = a.family || '';
       const given = a.given || '';
       const isJapanese = /^[\u3000-\u9FFF\uF900-\uFAFF]/.test(family);
@@ -1099,6 +1156,9 @@
       if (isOwn) {
         ownText = nameStr;
         if (isCorresponding) nameStr += '*';
+        if (limit === 'special-5') {
+          nameStr += ` (${idx + 1}/${N})`;
+        }
       }
       return nameStr;
     });
